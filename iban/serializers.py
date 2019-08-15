@@ -18,10 +18,11 @@ class IBANSerializer(serializers.ModelSerializer):
         fields = ['user', 'number']
 
     def create(self, validated_data):
+        creator = self.context['request'].user
         user_data = validated_data.pop('user')
         random_username = str(uuid4())
         user = User.objects.create(username=random_username, **user_data)
-        return IBAN.objects.create(user=user, **validated_data)
+        return IBAN.objects.create(user=user, creator=creator, **validated_data)
 
     def update(self, instance, validated_data):
         try:

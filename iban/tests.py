@@ -43,8 +43,8 @@ class IBANTests(APITestCase):
     def tearDown(self):
         super().tearDown()
 
-        User.objects.all().delete()
         IBAN.objects.all().delete()
+        User.objects.all().delete()
 
     def _ok_test(self, test, *args, **kwargs):
         test(*args, **kwargs)
@@ -86,21 +86,23 @@ class IBANTests(APITestCase):
 
         # populate some IBANS
         for number in IBAN_VALID:
-            IBAN.objects.create(user=self.user, number=number)
+            IBAN.objects.create(user=self.user, number=number, creator=self.admin)
 
         url = reverse('iban-list')
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(IBAN.objects.count(), len(IBAN_VALID))
 
-    def test_delete(self, user=None):
+    def test_delete(self, user=None, creator=None):
+        if creator is None:
+            creator = self.admin
         if user is None:
             user = self.admin
         self.client.login(username=user.username, password='123')
 
         # populate some IBANS
         for number in IBAN_VALID:
-            IBAN.objects.create(user=self.user, number=number)
+            IBAN.objects.create(user=self.user, number=number, creator=creator)
 
         url = reverse('iban-list')
         response = self.client.get(url, format='json')
@@ -116,7 +118,9 @@ class IBANTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(IBAN.objects.count(), len(IBAN_VALID) - 1)
 
-    def test_update(self, user=None):
+    def test_update(self, user=None, creator=None):
+        if creator is None:
+            creator = self.admin
         if user is None:
             user = self.admin
         self.client.login(username=user.username, password='123')
@@ -124,7 +128,7 @@ class IBANTests(APITestCase):
         # populate some IBANS
         number = random.choice(IBAN_VALID)
         number2 = random.choice(IBAN_VALID)
-        iban = IBAN.objects.create(user=self.user, number=number)
+        iban = IBAN.objects.create(user=self.user, number=number, creator=creator)
 
         url = reverse('iban-detail', kwargs={'pk': iban.pk})
         response = self.client.get(url, format='json')
@@ -154,15 +158,31 @@ class IBANTests(APITestCase):
         self.assertEqual(iban.user.last_name, 'Doe')
 
     def test_permissions(self):
+        # admin user
+        admin2 = User.objects.create(is_superuser=True, is_staff=True, username='admin2')
+        admin2.set_password('123')
+        admin2.save()
+
         self._ok_test(self.test_list, None)
         self._ok_test(self.test_list, self.admin)
+        self._ok_test(self.test_list, admin2)
         self._ok_test(self.test_list, self.user)
 
+        # Admin users can create and update / delete their created objects
         self._ok_test(self.test_create, self.admin)
-        self._fail_test(self.test_create, self.user)
-
+        self._ok_test(self.test_create, admin2)
         self._ok_test(self.test_delete, self.admin)
-        self._fail_test(self.test_delete, self.user)
-
         self._ok_test(self.test_update, self.admin)
+
+        # normal users can't create, update or delete
+        self._fail_test(self.test_create, self.user)
+        self._fail_test(self.test_delete, self.user)
+        self._fail_test(self.test_delete, self.user, creator=self.user)
         self._fail_test(self.test_update, self.user)
+
+        # It's only possible to modify object owned
+        self._fail_test(self.test_delete, admin2, creator=self.admin)
+        self._fail_test(self.test_update, admin2, creator=self.admin)
+        self._fail_test(self.test_update, self.admin, creator=admin2)
+        self._ok_test(self.test_update, admin2, creator=admin2)
+        self._ok_test(self.test_delete, admin2, creator=admin2)
