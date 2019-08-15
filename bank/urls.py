@@ -25,8 +25,19 @@ router = routers.DefaultRouter()
 router.register('iban', IBANViewSet)
 
 
+# The google authentication is based on
+# https://django-rest-auth.readthedocs.io/en/latest/introduction.html
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from rest_auth.registration.views import SocialLoginView
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+
+
 urlpatterns = [
     path('', include(router.urls)),
     path('admin/', admin.site.urls),
-    path('api-auth/', include('rest_framework.urls', namespace='rest_framework'))
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
+    path('rest-auth/', include('rest_auth.urls')),
+    path('rest-auth/google/', GoogleLogin.as_view(), name='g_login'),
 ]
