@@ -186,3 +186,30 @@ class IBANTests(APITestCase):
         self._fail_test(self.test_update, self.admin, creator=admin2)
         self._ok_test(self.test_update, admin2, creator=admin2)
         self._ok_test(self.test_delete, admin2, creator=admin2)
+
+    def test_validation(self):
+        user = self.admin
+        self.client.login(username=user.username, password='123')
+
+        number = random.choice(IBAN_INVALID)
+        url = reverse('iban-list')
+        data = {
+            'number': number,
+            'user': {
+                'first_name': 'test',
+                'last_name': 'user',
+            },
+        }
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.test_create(user=user)
+        iban = IBAN.objects.get()
+        url = reverse('iban-detail', kwargs={'pk': iban.pk})
+        response = self.client.get(url, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['number'], iban.number)
+
+        response = self.client.patch(url, data={'number': number}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
