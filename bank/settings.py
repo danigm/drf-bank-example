@@ -141,3 +141,8 @@ REST_FRAMEWORK = {
 }
 
 SITE_ID = 1
+
+try:
+    from local_settings import *
+except ImportError:
+    print("local_settings.py not found")
