@@ -46,8 +46,24 @@ class IBANTests(APITestCase):
         User.objects.all().delete()
         IBAN.objects.all().delete()
 
-    def test_create(self):
-        self.client.login(username='admin', password='123')
+    def _ok_test(self, test, *args, **kwargs):
+        test(*args, **kwargs)
+        IBAN.objects.all().delete()
+
+    def _fail_test(self, test, *args, **kwargs):
+        try:
+            test(*args, **kwargs)
+        except AssertionError:
+            IBAN.objects.all().delete()
+            return
+
+        IBAN.objects.all().delete()
+        raise AssertionError
+
+    def test_create(self, user=None):
+        if user is None:
+            user = self.admin
+        self.client.login(username=user.username, password='123')
 
         number = random.choice(IBAN_VALID)
         url = reverse('iban-list')
@@ -64,7 +80,10 @@ class IBANTests(APITestCase):
         self.assertEqual(IBAN.objects.count(), 1)
         self.assertEqual(IBAN.objects.get().number, number)
 
-    def test_list(self):
+    def test_list(self, user=None):
+        if user is not None:
+            self.client.login(username=user.username, password='123')
+
         # populate some IBANS
         for number in IBAN_VALID:
             IBAN.objects.create(user=self.user, number=number)
@@ -74,7 +93,11 @@ class IBANTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(IBAN.objects.count(), len(IBAN_VALID))
 
-    def test_delete(self):
+    def test_delete(self, user=None):
+        if user is None:
+            user = self.admin
+        self.client.login(username=user.username, password='123')
+
         # populate some IBANS
         for number in IBAN_VALID:
             IBAN.objects.create(user=self.user, number=number)
@@ -84,7 +107,6 @@ class IBANTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(IBAN.objects.count(), len(IBAN_VALID))
 
-        self.client.login(username='admin', password='123')
         url = reverse('iban-detail', kwargs={'pk': IBAN.objects.first().pk})
         response = self.client.delete(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -94,8 +116,10 @@ class IBANTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(IBAN.objects.count(), len(IBAN_VALID) - 1)
 
-    def test_update(self):
-        self.client.login(username='admin', password='123')
+    def test_update(self, user=None):
+        if user is None:
+            user = self.admin
+        self.client.login(username=user.username, password='123')
 
         # populate some IBANS
         number = random.choice(IBAN_VALID)
@@ -128,3 +152,17 @@ class IBANTests(APITestCase):
         self.assertEqual(iban.number, number)
         self.assertEqual(iban.user.first_name, 'John')
         self.assertEqual(iban.user.last_name, 'Doe')
+
+    def test_permissions(self):
+        self._ok_test(self.test_list, None)
+        self._ok_test(self.test_list, self.admin)
+        self._ok_test(self.test_list, self.user)
+
+        self._ok_test(self.test_create, self.admin)
+        self._fail_test(self.test_create, self.user)
+
+        self._ok_test(self.test_delete, self.admin)
+        self._fail_test(self.test_delete, self.user)
+
+        self._ok_test(self.test_update, self.admin)
+        self._fail_test(self.test_update, self.user)
